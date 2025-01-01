@@ -25,24 +25,25 @@ const dateFlow = addKeyword(EVENTS.ACTION)
             const currentDate = new Date();
             let solicitedDate;
             try {
-                solicitedDate = await text2iso(userInput);
-                console.log("Fecha procesada a ISO:", solicitedDate);
+                // Obtener la fecha en formato ISO
+                const isoDate = await text2iso(userInput);
+                console.log("Fecha procesada a ISO:", isoDate);
+
+                // Crear un objeto Date con la fecha ISO
+                solicitedDate = new Date(isoDate);
+                if (isNaN(solicitedDate.getTime())) {
+                    throw new Error("Fecha inválida");
+                }
+                console.log("Fecha de inicio:", solicitedDate);
+
             } catch (error) {
                 console.error("Error al procesar la fecha:", error);
                 return ctxFn.endFlow("No se pudo interpretar la fecha proporcionada. Por favor, proporciona una fecha válida.");
             }
 
-            if (!solicitedDate) {
-                console.error("No se pudo deducir una fecha válida.");
-                return ctxFn.endFlow("No se pudo deducir una fecha. Por favor, proporciona una fecha válida.");
-            }
-
-            const startDate = new Date(solicitedDate);
-            console.log("Fecha de inicio:", startDate);
-
             let dateAvailable;
             try {
-                dateAvailable = await isDateAvailable(startDate);
+                dateAvailable = await isDateAvailable(solicitedDate);
                 console.log("Disponibilidad de la fecha:", dateAvailable);
             } catch (error) {
                 console.error("Error al verificar disponibilidad de la fecha:", error);
@@ -50,33 +51,50 @@ const dateFlow = addKeyword(EVENTS.ACTION)
             }
 
             if (!dateAvailable) {
-                let nextDateAvailable;
                 try {
-                    nextDateAvailable = await getNextAvailableSlot(startDate);
+                    const nextDateAvailable = await getNextAvailableSlot(solicitedDate);
                     console.log("Siguiente fecha disponible:", nextDateAvailable);
+
+                    // Convertir la siguiente fecha disponible a texto legible
+                    const nextDateText = await iso2text(nextDateAvailable.start.toISOString());
+                    
+                    const responseContent = `${promptBase}
+Hoy es: ${currentDate.toISOString()}
+La fecha solicitada es: ${solicitedDate.toISOString()}
+La fecha solicitada no está disponible. El próximo espacio disponible es: ${nextDateText}`;
+
+                    const response = await chat(responseContent, [{ role: 'user', content: userInput }]);
+                    console.log("Respuesta del bot en dateFlow (fecha no disponible):", response);
+                    
+                    await ctxFn.flowDynamic(response);
+                    await ctxFn.state.update({ date: nextDateAvailable.start });
+
+                    return ctxFn.gotoFlow(formFlow);
                 } catch (error) {
                     console.error("Error al obtener la siguiente fecha disponible:", error);
                     return ctxFn.endFlow("Ocurrió un error al obtener la siguiente fecha disponible. Por favor, intenta nuevamente más tarde.");
                 }
-
-                const isoString = nextDateAvailable.start.toISOString();
-                const dateText = await iso2text(isoString);
-                const responseContent = `${promptBase}\nHoy es: ${currentDate}\nLa fecha solicitada es: ${solicitedDate}\nLa fecha solicitada no está disponible. El próximo espacio disponible es: ${dateText}. Por favor, proporciona la fecha siempre en español.`;
-                const response = await chat(responseContent, [{ role: 'user', content: userInput }]);
-                console.log("Respuesta del bot en dateFlow (fecha no disponible):", response);
-                await ctxFn.flowDynamic(response);
-                await ctxFn.state.update({ date: nextDateAvailable.start });
-
-                return ctxFn.gotoFlow(formFlow);
             } else {
-                const dateText = await iso2text(startDate.toISOString());
-                const responseContent = `${promptBase}\nHoy es: ${currentDate}\nLa fecha solicitada es: ${solicitedDate}\nLa fecha solicitada está disponible. El turno sería el ${dateText}.`;
-                const response = await chat(responseContent, [{ role: 'user', content: userInput }]);
-                console.log("Respuesta del bot en dateFlow (fecha disponible):", response);
-                await ctxFn.flowDynamic(response);
-                await ctxFn.state.update({ date: startDate });
+                try {
+                    // Convertir la fecha solicitada a texto legible
+                    const dateText = await iso2text(solicitedDate.toISOString());
+                    
+                    const responseContent = `${promptBase}
+Hoy es: ${currentDate.toISOString()}
+La fecha solicitada es: ${solicitedDate.toISOString()}
+La fecha solicitada está disponible. El turno sería el ${dateText}`;
 
-                return ctxFn.gotoFlow(formFlow);
+                    const response = await chat(responseContent, [{ role: 'user', content: userInput }]);
+                    console.log("Respuesta del bot en dateFlow (fecha disponible):", response);
+                    
+                    await ctxFn.flowDynamic(response);
+                    await ctxFn.state.update({ date: solicitedDate });
+
+                    return ctxFn.gotoFlow(formFlow);
+                } catch (error) {
+                    console.error("Error al procesar la fecha disponible:", error);
+                    return ctxFn.endFlow("Ocurrió un error al procesar la fecha. Por favor, intenta nuevamente más tarde.");
+                }
             }
         });
 

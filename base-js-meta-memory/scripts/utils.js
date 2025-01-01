@@ -4,7 +4,7 @@ import { DateTime } from 'luxon';
 function iso2text(iso) {
     try {
         // Convertir la fecha a DateTime de Luxon
-        const dateTime = DateTime.fromISO(iso, { zone: 'utc' }).setZone('Europe/London');
+        const dateTime = DateTime.fromISO(iso, { zone: 'utc' }).setZone('America/Guayaquil');
 
         // Formatear la fecha
         const formattedDate = dateTime.toLocaleString({
