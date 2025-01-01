@@ -3,7 +3,7 @@ import { MemoryDB as Database } from '@builderbot/bot';
 import { MetaProvider as Provider } from '@builderbot/provider-meta';
 import { dateFlow } from '../flows/date.Flow.js';
 import { welcomeFlow } from '../flows/welcome.Flow.js';
-import formFlow from '../flows/form.Flow.js';
+import {formFlow} from '../flows/form.Flow.js';
 
 const PORT = process.env.PORT ?? 3008;
 

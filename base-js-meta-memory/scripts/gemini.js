@@ -22,4 +22,4 @@ const chat = async (prompt, messages) => {
     }
 };
 
-export default chat;
+export { chat };

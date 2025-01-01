@@ -1,4 +1,4 @@
-import chat from "../scripts/gemini.js";
+import {chat} from "../scripts/gemini.js";
 import { DateTime } from 'luxon';
 
 function iso2text(iso) {
