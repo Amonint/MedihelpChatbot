@@ -1,5 +1,6 @@
 import { addKeyword, EVENTS } from '@builderbot/bot';
 import { createEvent } from "../scripts/calendar.js";
+import { dateFlow } from "./date.Flow.js";
 
 // Este es el flujo que recoge los datos del usuario una vez confirmada la fecha
 const formFlow = addKeyword(EVENTS.ACTION)
@@ -13,24 +14,28 @@ const formFlow = addKeyword(EVENTS.ACTION)
             console.log("Llegó al segundo paso de formFlow con el contexto:", ctx);
             await ctxFn.state.update({ motive: ctx.body });
         })
-    .addAnswer("¡Genial! Estoy creando la cita con los datos proporcionados.", null,
+    .addAnswer("¡Genial! ¿Deseas confirmar esta cita? Responde 'sí' para confirmar o 'no' para elegir otra fecha.", { capture: true },
         async (ctx, ctxFn) => {
-            console.log("Llegó al tercer paso de formFlow. Creando cita...");
+            const userConfirmation = ctx.body.trim().toLowerCase();
+            if (userConfirmation === 'si') {
+                // Recuperar la información de la cita
+                const userInfo = await ctxFn.state.getMyState();
+                const eventName = userInfo.name;
+                const description = userInfo.motive;
+                const date = userInfo.date;
 
-            // Recuperar la información de la cita
-            const userInfo = await ctxFn.state.getMyState();
-            const eventName = userInfo.name;
-            const description = userInfo.motive;
-            const date = userInfo.date;
+                // Crear el evento
+                const eventId = await createEvent(eventName, description, date);
+                console.log("Reunión creada con ID:", eventId);
 
-            // Crear el evento
-            const eventId = await createEvent(eventName, description, date);
-            console.log("Reunión creada con ID:", eventId);
+                // Limpiar el estado
+                await ctxFn.state.clear();
 
-            // Limpiar el estado
-            await ctxFn.state.clear();
-
-            return ctxFn.endFlow("¡Cita agendada con éxito! Te esperamos.");
+                return ctxFn.endFlow("¡Cita agendada con éxito! Te esperamos.");
+            } else {
+                // Si la respuesta es 'no' o cualquier otra cosa, volver a solicitar una fecha
+                return ctxFn.gotoFlow(dateFlow);
+            }
         });
 
 export { formFlow };

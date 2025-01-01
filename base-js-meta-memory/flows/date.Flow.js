@@ -57,7 +57,7 @@ const dateFlow = addKeyword(EVENTS.ACTION)
 
                     // Convertir la siguiente fecha disponible a texto legible
                     const nextDateText = await iso2text(nextDateAvailable.start.toISOString());
-                    
+
                     const responseContent = `${promptBase}
 Hoy es: ${currentDate.toISOString()}
 La fecha solicitada es: ${solicitedDate.toISOString()}
@@ -65,7 +65,7 @@ La fecha solicitada no está disponible. El próximo espacio disponible es: ${ne
 
                     const response = await chat(responseContent, [{ role: 'user', content: userInput }]);
                     console.log("Respuesta del bot en dateFlow (fecha no disponible):", response);
-                    
+
                     await ctxFn.flowDynamic(response);
                     await ctxFn.state.update({ date: nextDateAvailable.start });
 
@@ -78,19 +78,28 @@ La fecha solicitada no está disponible. El próximo espacio disponible es: ${ne
                 try {
                     // Convertir la fecha solicitada a texto legible
                     const dateText = await iso2text(solicitedDate.toISOString());
-                    
+
                     const responseContent = `${promptBase}
 Hoy es: ${currentDate.toISOString()}
 La fecha solicitada es: ${solicitedDate.toISOString()}
-La fecha solicitada está disponible. El turno sería el ${dateText}`;
+La fecha solicitada está disponible. El turno sería el ${dateText}. ¿Deseas confirmar esta cita? Responde 'sí' para confirmar o 'no' para elegir otra fecha.`;
 
                     const response = await chat(responseContent, [{ role: 'user', content: userInput }]);
                     console.log("Respuesta del bot en dateFlow (fecha disponible):", response);
-                    
+
                     await ctxFn.flowDynamic(response);
                     await ctxFn.state.update({ date: solicitedDate });
 
-                    return ctxFn.gotoFlow(formFlow);
+                    // Esperar la respuesta del usuario
+                    const userConfirmation = await ctxFn.waitForUserResponse();
+
+                    if (userConfirmation.toLowerCase() === 'sí') {
+                        // Confirmar la cita y proceder con el flujo de formulario
+                        return ctxFn.gotoFlow(formFlow);
+                    } else {
+                        // Solicitar una nueva fecha
+                        return ctxFn.gotoFlow(dateFlow);
+                    }
                 } catch (error) {
                     console.error("Error al procesar la fecha disponible:", error);
                     return ctxFn.endFlow("Ocurrió un error al procesar la fecha. Por favor, intenta nuevamente más tarde.");
