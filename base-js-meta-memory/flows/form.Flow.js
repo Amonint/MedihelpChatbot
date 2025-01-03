@@ -2,16 +2,13 @@ import { addKeyword, EVENTS } from '@builderbot/bot';
 import { createEvent } from "../scripts/calendar.js";
 import { dateFlow } from "./date.Flow.js";
 
-// Este es el flujo que recoge los datos del usuario una vez confirmada la fecha
 const formFlow = addKeyword(EVENTS.ACTION)
     .addAnswer("Te voy a hacer unas consultas primero para agendar tu turno. Primero, ¿cuál es tu nombre?", { capture: true },
         async (ctx, ctxFn) => {
-            console.log("Llegó al primer paso de formFlow con el contexto:", ctx);
             await ctxFn.state.update({ name: ctx.body });
         })
     .addAnswer("Perfecto, ¿cuál es el motivo del turno?", { capture: true },
         async (ctx, ctxFn) => {
-            console.log("Llegó al segundo paso de formFlow con el contexto:", ctx);
             await ctxFn.state.update({ motive: ctx.body });
         })
     .addAnswer("¡Genial! ¿Deseas confirmar esta cita? Responde 'sí' para confirmar o 'no' para elegir otra fecha.", { capture: true },

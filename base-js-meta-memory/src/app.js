@@ -4,7 +4,8 @@ import { MetaProvider as Provider } from '@builderbot/provider-meta';
 import { dateFlow } from '../flows/date.Flow.js';
 import { welcomeFlow } from '../flows/welcome.Flow.js';
 import { formFlow } from '../flows/form.Flow.js';
-import {  documentFlow, mediaFlow } from '../flows/recetas.Flow.js'; // Ajuste aquí
+import {  documentFlow, mediaFlow } from '../flows/recetas.Flow.js';
+import {  locationFlow} from '../flows/location.Flow.js'; // Ajuste aquí
 import path from 'path';
 
 
@@ -56,7 +57,7 @@ const main = async () => {
         flowPrincipal,
         dateFlow,
         formFlow,
-        welcomeFlow,documentFlow,mediaFlow // Incluido aquí
+        welcomeFlow,documentFlow,mediaFlow,locationFlow // Incluido aquí
     ]);
     const adapterProvider = createProvider(Provider, {
         jwtToken: process.env.JWT_TOKEN,
