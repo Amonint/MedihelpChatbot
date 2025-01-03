@@ -5,36 +5,49 @@ import { dateFlow } from '../flows/date.Flow.js';
 import { welcomeFlow } from '../flows/welcome.Flow.js';
 import { formFlow } from '../flows/form.Flow.js';
 import {  documentFlow, mediaFlow } from '../flows/recetas.Flow.js'; // Ajuste aquí
+import path from 'path';
+
 
 const PORT = process.env.PORT ?? 3008;
 
-const flowPrincipal = addKeyword(EVENTS.WELCOME)
-    .addAction(async (ctx, ctxFn) => {
-        const bodyText = ctx.body.toLowerCase();
+const flowPrincipal = addKeyword(EVENTS.WELCOME).addAction(async (ctx, ctxFn) => {
+    const bodyText = ctx.body.toLowerCase();
+    const fileExtension = ctx.event?.file ? path.extname(ctx.event.file.name).toLowerCase() : null;
 
-        // El usuario está saludando?
-        const keywords = ["hola", "buenas", "ola"];
-        const containsKeyword = keywords.some(keyword => bodyText.includes(keyword));
-        if (containsKeyword && ctx.body.length < 8) {
-            return await ctxFn.gotoFlow(welcomeFlow);
+    const actions = [
+        { 
+            condition: () => ['hola', 'buenas', 'ola'].some(k => bodyText.includes(k)) && ctx.body.length < 8,
+            action: () => ctxFn.gotoFlow(welcomeFlow)
+        },
+        {
+            condition: () => ['agendar', 'cita', 'turno'].some(k => bodyText.includes(k)),
+            action: () => ctxFn.gotoFlow(dateFlow)
+        },
+        {
+            condition: () => ['receta', 'recetas', 'pastillas', 'pastilla', 'leer receta', 'medicacion'].some(k => bodyText.includes(k)),
+            action: () => ctxFn.endFlow(
+                '📄 Por favor, envía un archivo con la receta médica en formato PDF o una foto de la receta para continuar con el análisis.'
+            )
+        },
+        {
+            condition: () => fileExtension === '.pdf',
+            action: () => ctxFn.gotoFlow(documentFlow)
+        },
+        {
+            condition: () => ['.jpg', '.jpeg', '.png'].includes(fileExtension),
+            action: () => ctxFn.gotoFlow(mediaFlow)
+        },
+        {
+            condition: () => fileExtension,
+            action: () => ctxFn.endFlow('❌ Por favor, envía un archivo válido (imagen o PDF).')
         }
+    ];
 
-        // El usuario quiere agendar una cita?
-        const keywordsDate = ["agendar", "cita", "reunion", "turno"];
-        const containsKeywordDate = keywordsDate.some(keyword => bodyText.includes(keyword));
-        if (containsKeywordDate) {
-            return ctxFn.gotoFlow(dateFlow);
-        }
+    const match = actions.find(({ condition }) => condition());
+    return match ? match.action() : ctxFn.endFlow('No entiendo tu mensaje. ¿Podrías ser más específico?');
+});
 
-        // El usuario envía una receta o documento médico
-        const keywordsRecetas = ["receta", "recetas", "historia clínica", "leer receta"];
-        const containsKeywordRecetas = keywordsRecetas.some(keyword => bodyText.includes(keyword));
-        if (containsKeywordRecetas) {
-            return ctxFn.gotoFlow(mediaFlow,documentFlow); // Redirige al flujo de documentos
-        }
 
-        return ctxFn.endFlow("No te entiendo");
-    });
 
 const main = async () => {
     const database = new Database();
@@ -43,9 +56,7 @@ const main = async () => {
         flowPrincipal,
         dateFlow,
         formFlow,
-        welcomeFlow,
-
-        mediaFlow // Incluido aquí
+        welcomeFlow,documentFlow,mediaFlow // Incluido aquí
     ]);
     const adapterProvider = createProvider(Provider, {
         jwtToken: process.env.JWT_TOKEN,
