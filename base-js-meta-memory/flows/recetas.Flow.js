@@ -19,23 +19,45 @@ const model = genAI.getGenerativeModel({
     generationConfig: MODEL_CONFIG,
 });
 
-const PHARMACIST_PROMPT = `Eres un farmacéutico experto y amable. Tu tarea es analizar recetas médicas y proporcionar información clara y útil para el paciente.
+const ANALYSIS_PROMPT = `Soy Caresense, un asistente especializado en análisis médicos. Mi objetivo es ayudarte a entender tus medicamentos y resultados de laboratorio de manera simple y clara.
 
-Para cada medicamento en la receta:
-1. Identifica el nombre y la forma de administración (oral, spray, tópico, etc.)
-2. Explica brevemente para qué se usa este medicamento
-3. Si la receta incluye instrucciones específicas de dosificación, repítelas claramente
-4. Menciona las contraindicaciones importantes y precauciones
-5. Indica si hay interacciones relevantes con otros medicamentos o alimentos
+Si la imagen contiene una receta médica, analizaré:
+# 💊 Medicamentos Recetados
+Por cada medicamento explicaré:
+- Nombre del medicamento en **negrita**
+- Para qué sirve en *cursiva*
+- Cómo tomarlo correctamente:
+  • Momento del día (mañana, tarde, noche)
+  • Con o sin alimentos
+  • Cantidad exacta
+  • Duración del tratamiento (si se especifica)
+- Consejos prácticos y cuidados importantes
+
+Si la imagen contiene resultados de laboratorio, analizaré:
+# 🔬 Resultados de Laboratorio
+Por cada resultado:
+- Nombre del examen en **negrita**
+- El resultado y su valor de referencia
+- Explicación simple de qué significa
+- Recomendaciones generales si está alterado
 
 Formato de respuesta:
-- Usa emojis apropiados
-- Estructura la información de manera clara
-- Usa un tono amigable pero profesional
-- Evita especular sobre dosificación si no está en la receta
-- Enfatiza la importancia de seguir las instrucciones del médico
+• Usar lenguaje simple y claro
+• Enfocarse en información práctica y útil
+• Evitar términos médicos complejos
+• No mencionar "no hay resultados" si no aparecen en la imagen
+• Si solo hay receta, analizar solo medicamentos
+• Si solo hay resultados de laboratorio, analizar solo estos
 
-IMPORTANTE: No sugieras dosificación si no está especificada en la receta.`;
+Ejemplo de formato para medicamentos:
+**Medicina X 100mg**
+*Para: [beneficio principal]*
+Tomar: [instrucciones claras]
+Consejos: [tips prácticos]
+
+⚠️ Recordatorio final: "Esta información te ayuda a entender mejor tu tratamiento. Sigue siempre las indicaciones de tu médico."`;
+
+// El resto del código permanece igual, solo actualizando la variable ANALYSIS_PROMPT en las funciones
 
 const sendImageToGemini = async (imagePath) => {
     try {
@@ -47,7 +69,7 @@ const sendImageToGemini = async (imagePath) => {
         });
         
         const result = await model.generateContent([
-            PHARMACIST_PROMPT,
+            ANALYSIS_PROMPT,
             {
                 inlineData: {
                     data: base64Image,
@@ -57,16 +79,42 @@ const sendImageToGemini = async (imagePath) => {
         ]);
 
         const text = result.response.text();
-        return text || '❌ No se pudo detectar texto en la receta médica';
+        return text || '❌ No pude leer claramente la imagen. ¿Podrías enviarla nuevamente?';
     } catch (error) {
         console.error("Error procesando imagen:", error);
         throw error;
     }
 };
 
+const analyzePDF = async (filePath) => {
+    try {
+        const fileBuffer = fs.readFileSync(filePath);
+        const base64PDF = fileBuffer.toString('base64');
+        
+        fs.unlink(filePath, (err) => {
+            if (err) console.error('Error deleting temp file:', err);
+        });
+
+        const result = await model.generateContent([
+            ANALYSIS_PROMPT,
+            {
+                inlineData: {
+                    data: base64PDF,
+                    mimeType: "application/pdf"
+                }
+            }
+        ]);
+
+        return result.response.text();
+    } catch (error) {
+        console.error("Error processing PDF:", error);
+        throw error;
+    }
+};
+
 const mediaFlow = addKeyword(EVENTS.MEDIA)
     .addAnswer(
-        '🔍 Analizando tu receta médica...',
+        '🔍 Analizando tu documento médico...',
         null,
         async (ctx, { flowDynamic, provider }) => {
             try {
@@ -79,68 +127,43 @@ const mediaFlow = addKeyword(EVENTS.MEDIA)
                 const analysis = await sendImageToGemini(filePath);
                 await flowDynamic([
                     { 
-                        body: `${analysis}\n\n⚕️ Recuerda: Esta información es solo educativa. Siempre sigue las instrucciones específicas de tu médico.`
+                        body: analysis
                     }
                 ]);
             } catch (error) {
                 console.error('Error:', error);
-                await flowDynamic('❌ Error procesando la receta. Por favor, intenta nuevamente.');
+                await flowDynamic('❌ No pude procesar el documento. ¿Podrías intentar nuevamente?');
             }
         }
     );
-    const analyzePDF = async (filePath) => {
-        try {
-            const fileBuffer = fs.readFileSync(filePath);
-            const base64PDF = fileBuffer.toString('base64');
-            
-            fs.unlink(filePath, (err) => {
-                if (err) console.error('Error deleting temp file:', err);
-            });
-    
-            const result = await model.generateContent([
-                PHARMACIST_PROMPT,
-                {
-                    inlineData: {
-                        data: base64PDF,
-                        mimeType: "application/pdf"
-                    }
+
+const documentFlow = addKeyword(EVENTS.DOCUMENT)
+    .addAnswer(
+        '📄 Analizando documento...',
+        null,
+        async (ctx, { flowDynamic, provider }) => {
+            try {
+                const tmpDir = path.join(process.cwd(), 'tmp');
+                fs.mkdirSync(tmpDir, { recursive: true });
+
+                const filePath = await provider.saveFile(ctx, { path: tmpDir });
+                
+                if (!filePath.toLowerCase().endsWith('.pdf')) {
+                    await flowDynamic('❌ Por favor, envía un documento en formato PDF.');
+                    return;
                 }
-            ]);
-    
-            return result.response.text();
-        } catch (error) {
-            console.error("Error processing PDF:", error);
-            throw error;
-        }
-    };
-    
-    const documentFlow = addKeyword(EVENTS.DOCUMENT)
-        .addAnswer(
-            '📄 Analizando documento...',
-            null,
-            async (ctx, { flowDynamic, provider }) => {
-                try {
-                    const tmpDir = path.join(process.cwd(), 'tmp');
-                    fs.mkdirSync(tmpDir, { recursive: true });
-    
-                    const filePath = await provider.saveFile(ctx, { path: tmpDir });
-                    
-                    if (!filePath.toLowerCase().endsWith('.pdf')) {
-                        await flowDynamic('❌ Por favor, envía un documento en formato PDF.');
-                        return;
+
+                const analysis = await analyzePDF(filePath);
+                await flowDynamic([
+                    {
+                        body: analysis
                     }
-    
-                    const analysis = await analyzePDF(filePath);
-                    await flowDynamic([
-                        {
-                            body: `${analysis}\n\n⚕️ Recuerda: Esta información es educativa. Sigue las instrucciones de tu médico.`
-                        }
-                    ]);
-                } catch (error) {
-                    console.error('Error:', error);
-                    await flowDynamic('❌ Error procesando el documento. Intenta nuevamente.');
-                }
+                ]);
+            } catch (error) {
+                console.error('Error:', error);
+                await flowDynamic('❌ No pude procesar el documento. ¿Podrías intentar nuevamente?');
             }
-        );
+        }
+    );
 
 export { mediaFlow, documentFlow };

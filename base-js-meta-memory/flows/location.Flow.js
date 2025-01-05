@@ -62,47 +62,42 @@ const sendLocationToWhatsApp = async (phoneNumber, location) => {
 };
 
 const locationFlow = addKeyword(EVENTS.LOCATION)
-    .addAnswer('Buscando establecimientos cercanos...', null, async (ctx, ctxFn) => {
-        try {
-            const latitude = ctx.latitude;
-            const longitude = ctx.longitude;
-            const phoneNumber = ctx.from; // Número de teléfono del usuario
+    .addAnswer('Por favor, comparte tu ubicación para buscar hospitales o clínicas cercanas.', null, async (ctx, ctxFn) => {
+        const latitude = ctx.latitude;
+        const longitude = ctx.longitude;
+        const phoneNumber = ctx.from;
 
-            if (!latitude || !longitude) {
-                console.log('Error: Coordenadas no encontradas en el contexto:', ctx);
-                await ctxFn.flowDynamic('No se pudieron obtener las coordenadas. Verifica que has compartido tu ubicación correctamente.');
-                return;
-            }
-
-            console.log('Datos extraídos:', { latitude, longitude });
-
-            // Obtener lugares cercanos usando Google Places API
-            const clinics = await getNearbyClinics(latitude, longitude);
-
-            if (clinics.length === 0) {
-                console.log('No se encontraron lugares cercanos.');
-                await ctxFn.flowDynamic('No se encontraron establecimientos cercanos. Intenta de nuevo más tarde.');
-                return;
-            }
-
-            console.log('Resultados de Google Places API:', clinics);
-
-            // Enviar cada clínica al usuario como una ubicación
-            for (const clinic of clinics) {
-                const location = {
-                    lat: clinic.location.lat,
-                    lng: clinic.location.lng,
-                    name: clinic.name,
-                    address: clinic.address,
-                };
-                await sendLocationToWhatsApp(phoneNumber, location);
-            }
-
-            await ctxFn.flowDynamic('Te hemos enviado las ubicaciones de los establecimientos cercanos.');
-        } catch (error) {
-            console.error('Error completo:', error);
-            await ctxFn.flowDynamic('Error al procesar la ubicación. Por favor, intenta nuevamente.');
+        // Verificar si ya recibimos la ubicación
+        if (!latitude || !longitude) {
+            console.log('Esperando la ubicación del usuario...');
+            return; // No hacemos nada hasta que se reciba la ubicación
         }
+
+        console.log('Coordenadas recibidas:', { latitude, longitude });
+
+        // Obtener lugares cercanos
+        const clinics = await getNearbyClinics(latitude, longitude);
+
+        if (clinics.length === 0) {
+            console.log('No se encontraron lugares cercanos.');
+            await ctxFn.flowDynamic('No se encontraron establecimientos cercanos. Intenta de nuevo más tarde.');
+            return;
+        }
+
+        console.log('Resultados de Google Places API:', clinics);
+
+        // Enviar cada clínica como ubicación
+        for (const clinic of clinics) {
+            const location = {
+                lat: clinic.location.lat,
+                lng: clinic.location.lng,
+                name: clinic.name,
+                address: clinic.address,
+            };
+            await sendLocationToWhatsApp(phoneNumber, location);
+        }
+
+        await ctxFn.flowDynamic('Te hemos enviado las ubicaciones de los establecimientos cercanos.');
     });
 
 export { locationFlow };
